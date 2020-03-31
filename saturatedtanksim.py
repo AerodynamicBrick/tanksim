@@ -2,6 +2,7 @@
 #http://www.aspirespace.org.uk/downloads/Modelling%20the%20nitrous%20run%20tank%20emptying.pdf
 
 import math
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -95,92 +96,190 @@ def p_vapor(T):
     b3=-1.3779
     b4=-4.051
     return(1000*p_c*(e**(b1*(1-Tr)+b2*(1-Tr)**(3/2)+b3*(1-Tr)**(5/2)+b4*(1-Tr)**5)))
+def Dyn_visc(T):
+    Tc=309.57
+    Tr=T/Tc
+    # Dynamic Viscosity of the Saturated Liquid
+    #eq 4.9 thermophysical properties
+    #Aplicable from -90C to 36C
+    
+    #constants
+    rho_c=452.0 #critical density
+    e=2.718281828459
+    b1=1.6089
+    b2=2.0439
+    b3=5.24
+    b4=0.0293423
+    theta=(Tc-b3)/(T-b3)
+    return(b4*exp(b1*(theta-1)^(1/3)+b2*(theta-1)^(4/3)))
+
 
 #Physical constants of n2o
 rho_c=452.0 #critical density
 p_c=7251.0*1000 #critical pressure
 
 #system features
-DeltaP=1378951.46#pressure injector - pressure manifold
+chamber_pressure=350*6894.7573 #350 psi to pa
 K=2 #fudge factor, generally around 2 for n2o. fit this until it looks right.
-N=10 #number of injectors
-A_injector = 0.00000127 #area per injector
-timestep = 1 #time in between loops
-Vtank=2
+N=2 #number of injectors
+A_injector = 0.00000051886844613 #area per injector in m^2
+timestep = .001 #time in between loops in s
+Vtank=.016
 
 #initial conditions
 N2OTemp=294.15 #assumtion
-TankPressure=p_vapor(N2OTemp)
-m_liquid=3.5 #initial mass of the liquid in the tank
-m_vapor=m_liquid*.15 #starting mass of vapour in the tank.
+pressure=p_vapor(N2OTemp)
+
+
+m_total=12 #initial mass of the liquid in the tank in kg
+m_liquidNew=(Vtank-(m_total/rho_vapor(N2OTemp)))/((1/rho_liquid(N2OTemp))-(1/rho_vapor(N2OTemp))) #eq 1.12
+m_vapor=m_total-m_liquidNew
+m_vapor=0 #starting mass of vapour in the tank.
+
 
 #program values
-m_v=1 #mv is the mass vapourized.. The mv supposedly converges quickly to an actual value. 
+m_v=0 #mv is the mass vapourized.. The mv supposedly converges quickly to an actual value. 
 
 
 
-
+verbose=False
 ##########################################################
 ##############Let's Begin#################################
 ##########################################################
 
-print(N2OTemp)
-print(rho_liquid(N2OTemp))
-print(rho_vapor(N2OTemp))
+if(verbose): print(N2OTemp)
+if(verbose): print(rho_liquid(N2OTemp))
+if(verbose): print(rho_vapor(N2OTemp))
 
 try:
-    fig, ax = plt.subplots()
+    fig, ax = ax1.subplots()
     x = np.linspace(1, 309.57, 1000)
     y = rho_vapor(x)
     y2 = rho_liquid(x)
     ax.plot(x,y,lw=2,color='#539caf',alpha=1)
     ax.plot(x,y2,lw=2,color='#9053af',alpha=1)
-    plt.show()
+    ax1.show()
 except:
     pass
 
-m_total=m_liquid+m_vapor
 
-massnewarray=[[0,0]]
+massvaporarray=[[0,0]]
 massoldarray=[[0,0]]
-temparray=[[0,0]]
+masstotalarray=[[0,0]]
+massflowarray=[[0,0]]
+pressurearray=[[0,0]]
 i=0
 timetot=0
+warn=False
+
+
+
 while True:
+    pressure=p_vapor(N2OTemp)
+    DeltaP=pressure-chamber_pressure
+    if(1.2>pressure/chamber_pressure):
+        warn=True
+        print("WARNING, low injection pressure: "+str(pressure))
+    
     timetot=timetot+timestep
+    
     DeltaQ=m_v*H_v(N2OTemp) #heat removed from the liquid n2o during vaporisation
-    DeltaT=-1*(DeltaQ/(m_liquid*C_liquid(N2OTemp)))
-    N2OTemp=N2OTemp+DeltaT #add cause -1* in previous line
-    print(N2OTemp)
-    mdot_liquid=math.sqrt((2*rho_liquid(N2OTemp)*DeltaP)/(K/((N*A_injector)**2))) #eq 1.7
-    m_liquidOld=-1*m_liquid-(mdot_liquid*timestep) #eq 1.8
-    m_total=m_total-mdot_liquid*timestep
-    print("M Liquid Old= "+str(m_liquidOld))
-    #Vtank=(m_liquid/rho_liquid(N2OTemp))+(m_vapor/rho_vapor(N2OTemp)) #eq 1.10
-    m_total=m_liquid+m_vapor #eq 1.11
+    DeltaT=-1*(DeltaQ/(m_total*C_liquid(N2OTemp)))
+
+    if(verbose): print("N2O Temp Before: "+str(N2OTemp))
+    N2OTemp=N2OTemp+DeltaT
+    if(verbose): print("Delta T: "+str(DeltaT))
+    if(verbose): print("N2O Temp: "+str(N2OTemp)+"\n")
+
+    try:
+        mdot_ox=math.sqrt((2*rho_liquid(N2OTemp)*DeltaP)/(K/((N*A_injector)**2))) #eq 1.7
+    except ValueError:
+        print("WARNING: CHAMBER PRESSURE DROPPED BELOW INJECTION PRESSURE")
+        warn=True
+        #
+    
+    if(verbose): print("mdot liquid: " + str(mdot_ox))
+    if(verbose): print("rho vapor: "+str(rho_vapor(N2OTemp)))
+    if(verbose): print("rho liquid: "+str(rho_liquid(N2OTemp)))
+    m_liquidOld=m_total-(mdot_ox*timestep) #eq 1.8
+    
+    if(verbose): print("M Liquid Old: "+str(m_liquidOld))
+
     m_liquidNew=(Vtank-(m_total/rho_vapor(N2OTemp)))/((1/rho_liquid(N2OTemp))-(1/rho_vapor(N2OTemp))) #eq 1.12
-    print("M Liquid New= "+str(m_liquidNew))
+    if(verbose): print("M Liquid New: "+str(m_liquidNew))
+
     m_v=m_liquidOld-m_liquidNew #eq 1.13
-    print("Mv= "+str(m_v))
+    if(verbose): print("Mv: "+str(m_v))
+
+    m_vapor=m_vapor+m_v
+    
+    m_total=m_total-(timestep*mdot_ox)
+
+    if(verbose): print("M total: "+str(m_total))
+    
     if(m_liquidNew>m_liquidOld):
         break
 
+    massvaporarray.append((timetot,m_vapor))
     massoldarray.append((timetot,m_liquidOld))
-    m_liquidOld=m_liquidNew
-    
-    massnewarray.append((timetot,m_liquidNew))
-    temparray.append((timetot,N2OTemp))
-    
+    masstotalarray.append((timetot,m_total))
+    massflowarray.append((timetot,mdot_ox))
+    pressurearray.append((timetot,pressure))
+
     i=i+1
-    if(i==100):
+    print(i)
+    if(i==10000):
+        #pass
         break
-for ele in massnewarray[1:]:
-    plt.plot(ele[0],ele[1], 'b.')
-for ele in massoldarray[1:]:
-    plt.plot(ele[0],ele[1], 'g.')
-for ele in temparray[1:]:
-    plt.plot(ele[0],ele[1], 'r.')
+
+
+fig, ax1 = plt.subplots()
+ax2 = ax1.twinx()
+
+"""for ele in massvaporarray[1:]:
+    ax1.plot(ele[0],ele[1], 'b.')"""
+"""for ele in massoldarray[1:]:
+    ax1.plot(ele[0],ele[1], 'g.')"""
+"""
+for ele in masstotalarray[1:]:
+    ax1.plot(ele[0],ele[1], 'g.')"""
+
+for ele in massflowarray[1:]:
+    ax1.plot(ele[0],ele[1], 'g.')
+    
+for ele in pressurearray[1:]:
+    ax2.plot(ele[0],ele[1], 'm.')
+x_coordinates = [0, timetot]
+y_coordinates_crit = [chamber_pressure*1.2, chamber_pressure*1.2]
+y_coordinates2_fail = [chamber_pressure, chamber_pressure]
+
+
+ax2.plot(x_coordinates, y_coordinates_crit, 'r')
+ax2.plot(x_coordinates, y_coordinates2_fail, 'r')
+
+plt.title("mass over time")
+
+plt.xlabel("time (seconds)")
+ax1.set_ylabel("mass flow (kg/s)")
+ax1.legend()
+
+green_patch=mpatches.Patch(color="green", label="mass flow")
+#green_patch=mpatches.Patch(color="green", label="vapor mass")
+red_crit_patch=mpatches.Patch(color="red", label="Critical Pressure")
+red_fail_patch=mpatches.Patch(color="red", label="Failure Pressure")
+
+ax2.set_ylabel("pressure")
+mage_patch=mpatches.Patch(color="magenta", label="pressure")
+
+ax1.legend(handles=[green_patch,red_crit_patch,red_fail_patch,mage_patch])
+fig.tight_layout()
 plt.show()
+
+print(m_vapor)
+if(warn):
+    print("Completed with WARNINGS")
+else:
+    print("Completed Successfully")
     
 
 """
