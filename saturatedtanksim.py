@@ -120,9 +120,9 @@ p_c=7251.0*1000 #critical pressure
 
 #system features
 chamber_pressure=350*6894.7573 #350 psi to pa
-K=2 #fudge factor, generally around 2 for n2o. fit this until it looks right.
+K=2.6 #1/(Cd**2) #fudge factor, generally around 2 for n2o. fit this until it looks right.
 N=2 #number of injectors
-A_injector = 0.00000051886844613 #area per injector in m^2
+A_injector = 0.00000176384873*4 #area per injector in m^2
 timestep = .001 #time in between loops in s
 Vtank=.016
 
@@ -196,7 +196,8 @@ while True:
     except ValueError:
         print("WARNING: CHAMBER PRESSURE DROPPED BELOW INJECTION PRESSURE")
         warn=True
-        #
+        break
+        
     
     if(verbose): print("mdot liquid: " + str(mdot_ox))
     if(verbose): print("rho vapor: "+str(rho_vapor(N2OTemp)))
@@ -281,45 +282,3 @@ if(warn):
 else:
     print("Completed Successfully")
     
-
-"""
-Liquid nitrous flows out of the tank
-causing a drop in the level of liquid
-nitrous.
-"""
-
-"""
-This causes an increase in the
-head space of nitrous vapour above the
-liquid. The nitrous vapour pressure drops due
-to this expansion.
-"""
-
-"""
-Some of the liquid nitrous then
-vapourises to try to raise the vapour
-pressure back up.
-"""
-
-"""
-The energy required to vapourise the
-liquid comes from the liquid itself, and so
-its temperature drops.
-"""
-
-"""
-This lower temperature lowers the tank
-pressure.
-"""
-
-"""
-The flowrate of nitrous out of the tank
-depends on the difference between the
-tank and combustion chamber pressure.
-"""
-
-"""
-The fuel mass flowrate eroded from the
-plastic fuel grain depends on the total
-flowrate of fuel plus nitrous oxidiser.
-"""
